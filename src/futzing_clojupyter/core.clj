@@ -101,22 +101,21 @@
         ctx                 (zmq/context 1)
         [signer checker]    (u/make-signer-checker (:key config))
         proto-ctx	    {:signer signer, :checker checker}
-        [sh-ep in-ep io-ep] (mapv #(str "tcp://127.0.0.1:" (% config))  [:shell_port :stdin_port :iopub_port])
+        sh-ep               (str "tcp://127.0.0.1:" (-> config :shell_port))
         p      (promise)
         result (atom nil)]
-      (with-open [SH (-> (zmq/socket ctx :req) (zmq/connect sh-ep))  ; :req not :router
-                  IO (-> (zmq/socket ctx :pub) (zmq/connect io-ep))] ; :req here will hang
+      (with-open [shell (-> (zmq/socket ctx :req) (zmq/connect sh-ep))]  ; :req not :router
         (try
-          (let [transport (reset! diag (fzmq/make-zmq-transport proto-ctx SH #_IN IO))]
+          (let [transport (fzmq/make-zmq-transport proto-ctx shell)]
             (T/send-req transport "execute_request" {:encoded-jupyter-message msg})
             (cl-format *out* "~%Send completes.")
             (future (deliver p (T/receive-req   transport)))
             (reset! result (deref p 5000 :timeout)))
           (finally ; This doesn't seem to run when I interrupt with read on iopub
             (cl-format *out* "~%Cleanup")
-            (zmq/disconnect SH sh-ep)
-            (zmq/disconnect IO io-ep)
-            (doall (map #(do (zmq/set-linger % 0) (zmq/close %)) [SH #_IN IO]))
+            (zmq/disconnect shell sh-ep)
+            (zmq/set-linger shell 0)
+            (zmq/close shell)
             @result)))))
 
 (def hey

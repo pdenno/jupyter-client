@@ -47,26 +47,20 @@
                     (zmq/send socket seg more?)))]
     (doall (map send-it segments (range)))))
 
-(defn send** [socket req-socket iopub-socket encoded-jupyter-message]
-  (let [socket (case socket
-                 :req	req-socket
-                 :iopub	iopub-socket
-                 (throw (ex-info (str "send*: Unknown socket " socket ".") {:socket socket})))]
-    (send-segments socket encoded-jupyter-message)))
-
-(defrecord zmq-transport [S req-socket iopub-socket parent-message]
+(defrecord zmq-transport [S req-socket parent-message]
   T/Transport
-  (T/send* [_ socket resp-msgtype {:keys [encoded-jupyter-message] :as resp-message}] ; POD resp_msgtype not used.
-    (send** socket req-socket iopub-socket encoded-jupyter-message))
+  (T/send* [_ socket resp-msgtype {:keys [encoded-jupyter-message]}] ; POD resp_msgtype not used.
+      (when (not= socket :req) 
+        (throw (ex-info (str "send*: Unknown socket " socket ".") {:socket socket})))
+    (send-segments req-socket encoded-jupyter-message))
   (T/receive* [_ socket]
-    (-> (case socket
-          :iopub	(receive-jupyter-message iopub-socket 0)
-          :req		(receive-jupyter-message req-socket 0)
-          (throw (ex-info (str "read*: Unknown socket " socket ".") {:socket socket})))
+    (when (not= socket :req) 
+      (throw (ex-info (str "send*: Unknown socket " socket ".") {:socket socket})))
+    (-> (receive-jupyter-message req-socket 0)
         jup/build-message)))
 
 (alter-meta! #'->zmq-transport #(assoc % :private true))
 
 (defn make-zmq-transport
-  [S req-socket iopub-socket]
-  (->zmq-transport S req-socket iopub-socket nil))
+  [S req-socket]
+  (->zmq-transport S req-socket nil))
