@@ -79,9 +79,7 @@
 (def diag (atom nil))
 (def diag1 (atom nil))
 
- (clojure.string/replace "3a-bd6-92-d576055f8702899d2e2a8b41" #"-" "")
-
-(defn msg-tryme [& {:keys [code config-file] :or {config-file "./resources/connect.json", code "foo"}}]
+(defn msg-tryme [& {:keys [code config-file] :or {config-file "./resources/connect.json", code "'hi'"}}]
   (let [config              (-> config-file
                                 slurp
                                 u/parse-json-str
@@ -95,23 +93,26 @@
         ctx                 (zmq/context 1)
         [signer checker]    (u/make-signer-checker (:key config))
         proto-ctx	    {:signer signer, :checker checker}
-        [sh-ep in-ep io-ep] (mapv #(str "tcp://127.0.0.1:" (% config))  [:shell_port :stdin_port :iopub_port])]
-      (with-open [SH (-> (zmq/socket ctx :router) (zmq/connect sh-ep)) ; try :req
+        [sh-ep in-ep io-ep] (mapv #(str "tcp://127.0.0.1:" (% config))  [:shell_port :stdin_port :iopub_port])
+        p (promise)]
+      (with-open [SH (-> (zmq/socket ctx :req) (zmq/connect sh-ep)) ; try :req
                   IN (-> (zmq/socket ctx :router) (zmq/connect in-ep))
                   IO (-> (zmq/socket ctx :pub)    (zmq/connect io-ep))]
         (cl-format *out* "~%SH = ~A ~%IN = ~A ~%IO = ~A" SH IN IO)
         (try
           (let [transport (reset! diag (fzmq/make-zmq-transport proto-ctx SH IN IO))]
-            (T/send-req transport "execute_request" msg)
+            (T/send-req transport "execute_request" {:encoded-jupyter-message msg})
             (cl-format *out* "~%Send completes.")
-            (cl-format *out* "~% Received ~A" (T/receive-req transport)))
-          (finally
-            (cl-format *out* "~% cleanup")
+            (future (deliver p (T/receive-req transport)))
+            (cl-format *out* "~% Received ~A" (deref p 5000 :timeout))
+            (reset! diag @p))
+          (finally ; This doesn't seem to run when I interrupt with read on iopub
+            (cl-format *out* "~%Cleanup")
             (zmq/disconnect SH sh-ep)
             (zmq/disconnect IN in-ep)
             (zmq/disconnect IO io-ep)
-            (doall (map zmq/close [SH IN IO]))
-            #_(zmq/destroy ctx))))))
+            (doall (map #(do (zmq/set-linger % 0) (zmq/close %)) [SH IN IO]))
+            @p)))))
 
 (def hey
   (let [config (-> "./resources/connect.json"
@@ -123,6 +124,3 @@
         (assoc :envelope [(-> config :key .getBytes)])
         (assoc-in [:header :session] (:key config))
         (assoc-in [:content :code] "foo"))))
-             
-             
-                 
