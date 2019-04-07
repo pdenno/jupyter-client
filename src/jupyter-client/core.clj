@@ -1,14 +1,13 @@
-(ns futzing-clojupyter.core
+(ns jupyter-client.core
   (:require
-   [clojure.pprint			  :refer [pprint cl-format]]
-   [clojure.walk			  :as walk]
-   [zeromq.zmq				  :as zmq]
-   [clojupyter.kernel.util		  :as u]
-   [futzing-clojupyter.middleware	  :as M]
-   [futzing-clojupyter.middleware.base    :as MB]
-   [futzing-clojupyter.fzmq               :as fzmq]
-   [futzing-clojupyter.transport	  :as T]))
-
+   [clojure.pprint		   :refer [pprint cl-format]]
+   [clojure.walk		   :as walk]
+   [zeromq.zmq			   :as zmq]
+   [clojupyter.kernel.util	   :as u]
+   [jupyter-client.middleware	   :as M]
+   [jupyter-client.middleware.base :as MB]
+   [jupyter-client.zmq-client      :as fzmq]
+   [jupyter-client.transport	   :as T]))
 
 ;;; "4fb56c501d3340d398bb8d3742cd9e50" The byte array is the same as the session.
 ;;; Thus I need to replace it. 
@@ -59,7 +58,7 @@
           (zmq/destroy ctx))))))
 
 (defn wait-response
-  "Return within timeout or return :timeout."
+  "zmq/receive-str within timeout or return :timeout."
   [socket timeout]
   (let [p (promise)]
     (future (deliver p (zmq/receive-str socket)))
@@ -75,14 +74,13 @@
 ;;; What really matters is the messaging pattern used. (e.g. :rep, :req, :pair).
 ;;; You can do both send and recv with server/client doing respectively bind/connect with :rep/:req.
 
-(def diag (atom nil))
-(def diag1 (atom nil))
+(declare msg-tryme)
 
 ;;; stdin messages are unique in that the request comes from the kernel, and the reply from the frontend.
 ;;; The frontend is not required to support this, but if it does not, it must set 'allow_stdin' : False
 
 (defn trytry []
-  (msg-tryme :code "file = open('/Users/pdenno/Documents/git/futzing-clojupyter/testfile.txt','w')")
+  (msg-tryme :code "file = open('/Users/pdenno/Documents/git/jupyter-client/testfile.txt','w')")
   (msg-tryme :code "file.write(foo)")
   (msg-tryme :code "file.close()"))
 

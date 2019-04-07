@@ -1,16 +1,15 @@
-(ns futzing-clojupyter.middleware.base
+(ns jupyter-client.middleware.base
   (:require
-   [clojure.spec.alpha			:as s]
-   [taoensso.timbre			:as log]
-   ,,
-   [clojupyter.kernel.jupyter		:as jup]
-   [clojupyter.kernel.spec		:as sp]
-   [futzing-clojupyter.transport	:as tp		:refer [handler-when transport-layer
-                                                                response-mapping-transport
-                                                                parent-msgtype-pred]]
-   [clojupyter.kernel.util		:as u]
-   [clojupyter.kernel.version		:as ver]
-   ))
+   [clojure.spec.alpha		 :as s]
+   [taoensso.timbre		 :as log]
+   [clojupyter.kernel.jupyter	 :as jup] 
+   [clojupyter.kernel.spec	 :as sp]
+   [jupyter-client.transport	 :as tp :refer [handler-when transport-layer
+                                                response-mapping-transport
+                                                parent-msgtype-pred]]
+   [clojupyter.kernel.util	 :as u]
+   [clojupyter.kernel.version    :as ver]))
+
 
 (defn jupyter-message
   [{:keys [parent-message signer] :as ctx} resp-socket resp-msgtype response]

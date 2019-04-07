@@ -1,9 +1,9 @@
-(ns futzing-clojupyter.transport
+(ns jupyter-client.transport
   (:refer-clojure :exclude [send])
   (:require
-   [clojure.pprint			:as pp		:refer [pprint cl-format]]
-   [clojupyter.kernel.jupyter			:as jup]
-   [clojupyter.kernel.util			:as u]))
+   [clojure.pprint		:as pp	:refer [pprint cl-format]]
+   [clojupyter.kernel.jupyter	:as jup]
+   [clojupyter.kernel.util	:as u]))
 
 (defprotocol Transport
   (send* [_ socket msgtype message]
@@ -29,10 +29,6 @@
 (defn receive-stdin
   [transport]
   (receive* transport :stdin))
-
-(defn receive-iopub ; POD added this. 
-  [transport]
-  (receive* transport :iopub))
 
 (defn receive-req
   [transport]
@@ -95,11 +91,12 @@
    (fn [message]
      ((if (pred message) handler handler') message))))
 
+(map (partial u/set-var-indent! :defn)
+     [#'send* #'receive* #'bind-parent-message #'bind-transport
+      #'transport-layer #'handler-when])
+
 (defn parent-msgtype-pred
   [msgtype]
   (fn [{:keys [parent-message]}]
     (= (jup/message-msg-type parent-message) msgtype)))
 
-(map (partial u/set-var-indent! :defn)
-     [#'send* #'receive* #'bind-parent-message #'bind-transport
-      #'transport-layer #'handler-when])

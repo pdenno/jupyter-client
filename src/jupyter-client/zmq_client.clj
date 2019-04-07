@@ -1,11 +1,11 @@
-(ns futzing-clojupyter.fzmq
+(ns jupyter-client.zmq-client
   (:require
    [clojure.pprint				:as pp		:refer [pprint]]
    [taoensso.timbre				:as log]
    [zeromq.zmq					:as zmq]
    ,,
    [clojupyter.kernel.jupyter			:as jup]
-   [futzing-clojupyter.transport		:as T]))
+   [jupyter-client.transport		:as T]))
 
 (defn- receive-jupyter-message
   ([zmq-socket flag]
