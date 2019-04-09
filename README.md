@@ -3,7 +3,7 @@
 A Clojure library to interact with a jupyter kernel.
 
 This library allows you to run [execute_requests](https://jupyter-client.readthedocs.io/en/stable/messaging.html)
-against a jupyter kernel. 
+against a jupyter kernel and view what comes back from the kernel's stdout (if anything). 
 
 ## Usage
 
