@@ -2,8 +2,7 @@
   (:refer-clojure :exclude [send])
   (:require
    [clojure.pprint		:as pp	:refer [pprint cl-format]]
-   [clojupyter.kernel.jupyter	:as jup]
-   [clojupyter.kernel.util	:as u]))
+   [jupyter-client.util  	:as u]))
 
 (defprotocol Transport
   (send* [_ socket msgtype message]
@@ -22,9 +21,9 @@
   [transport msgtype message]
   (send* transport :stdin msgtype message))
 
-(defn ^{:style/indent :defn} send-iopub
-  [transport msgtype message]
-  (send* transport :iopub msgtype message))
+(defn ^{:style/indent :defn} receive-iopub
+  [transport]
+  (receive* transport :iopub))
 
 (defn receive-stdin
   [transport]
@@ -98,5 +97,5 @@
 (defn parent-msgtype-pred
   [msgtype]
   (fn [{:keys [parent-message]}]
-    (= (jup/message-msg-type parent-message) msgtype)))
+    (= (u/message-msg-type parent-message) msgtype)))
 

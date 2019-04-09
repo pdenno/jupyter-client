@@ -1,11 +1,11 @@
 (ns jupyter-client.zmq-client
   (:require
-   [clojure.pprint				:as pp		:refer [pprint]]
-   [taoensso.timbre				:as log]
-   [zeromq.zmq					:as zmq]
-   ,,
-   [clojupyter.kernel.jupyter			:as jup]
-   [jupyter-client.transport		:as T]))
+   [clojure.pprint		:as pp	:refer [pprint]]
+   [taoensso.timbre		:as log]
+   [zeromq.zmq			:as zmq]
+
+   [jupyter-client.util 	:as u]
+   [jupyter-client.transport	:as T]))
 
 (defn- receive-jupyter-message
   ([zmq-socket flag]
@@ -57,7 +57,7 @@
     (when (not= socket :req) 
       (throw (ex-info (str "send*: Unknown socket " socket ".") {:socket socket})))
     (-> (receive-jupyter-message req-socket 0)
-        jup/build-message)))
+        u/build-message)))
 
 (alter-meta! #'->zmq-transport #(assoc % :private true))
 

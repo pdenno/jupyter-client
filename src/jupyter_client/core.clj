@@ -2,14 +2,17 @@
   (:require
    [clojure.pprint		   :refer [pprint cl-format]]
    [clojure.walk		   :as walk]
+   [cheshire.core		   :as cheshire]
+   [pandect.algo.sha256		   :refer [sha256-hmac]]
+   [taoensso.timbre		   :as log]
    [zeromq.zmq			   :as zmq]
-   [clojupyter.kernel.util	   :as u]
-   [jupyter-client.middleware	   :as M]
-   [jupyter-client.middleware.base :as MB]
-   [jupyter-client.zmq-client      :as fzmq]
-   [jupyter-client.transport	   :as T]))
+   
+   [jupyter-client.util	           :as u]
+   [jupyter-client.transport	   :as T]
+   [jupyter-client.middleware	   :as MB]
+   [jupyter-client.zmq-client      :as zmqc]))
 
-;;; "4fb56c501d3340d398bb8d3742cd9e50" The byte array is the same as the session.
+;;; "4fb56c501d3340d398bb8d3742cd9e50" The :envelope byte array is the same as the session.
 ;;; Thus I need to replace it. 
 (def EXE-MSG {;:envelope 
 ;;;             [(byte-array [52, 102, 98, 53, 54, 99, 53, 48, 49, 100, 51, 51, 52, 48, 100, 51,
@@ -84,37 +87,47 @@
   (msg-tryme :code "file.write(foo)")
   (msg-tryme :code "file.close()"))
 
-(defn msg-tryme [& {:keys [code config-file] :or {config-file "./resources/connect.json", code "foo + 'hey'"}}]
-  (let [config              (-> config-file
-                                slurp
-                                u/parse-json-str
-                                walk/keywordize-keys
-                                (update :key #(clojure.string/replace % #"-" "")))
-        msg                 (-> EXE-MSG
-                                (assoc :envelope [(-> config :key .getBytes)])
-                                (assoc-in [:header :session] (:key config))
-                                (assoc-in [:content :code] code)
-                                (assoc-in [:content :allow_stdin] false)
-                                MB/encode-jupyter-message)
-        ctx                 (zmq/context 1)
-        [signer checker]    (u/make-signer-checker (:key config))
-        proto-ctx	    {:signer signer, :checker checker}
-        sh-ep               (str "tcp://127.0.0.1:" (-> config :shell_port))
-        p      (promise)
-        result (atom nil)]
-      (with-open [shell (-> (zmq/socket ctx :req) (zmq/connect sh-ep))]  ; :req not :router
-        (try
-          (let [transport (fzmq/make-zmq-transport proto-ctx shell)]
-            (T/send-req transport "execute_request" {:encoded-jupyter-message msg})
-            (cl-format *out* "~%Send completes.")
-            (future (deliver p (T/receive-req   transport)))
-            (reset! result (deref p 5000 :timeout)))
-          (finally ; This doesn't seem to run when I interrupt with read on iopub
-            (cl-format *out* "~%Cleanup")
-            (zmq/disconnect shell sh-ep)
-            (zmq/set-linger shell 0)
-            (zmq/close shell)
-            @result)))))
+(defn msg-tryme [& {:keys [code config-file] :or {config-file "./resources/connect.json",
+                                                  code "print('Greetings from Clojure!')"}}]
+  (let [config           (-> config-file
+                             slurp
+                             u/parse-json-str
+                             walk/keywordize-keys
+                             (update :key #(clojure.string/replace % #"-" "")))
+        [signer checker]  (u/make-signer-checker (:key config))
+        msg               (as-> EXE-MSG ?msg
+                            (assoc ?msg :envelope [(-> config :key .getBytes)])
+                            (assoc-in ?msg [:header :session] (:key config))
+                            (assoc-in ?msg [:content :code] code)
+                            (assoc-in ?msg [:content :allow_stdin] false)
+                            (assoc ?msg :signature (signer (:header ?msg) (:parent-header ?msg) {} {})) ; Not working.
+                            (MB/encode-jupyter-message ?msg))
+        ctx               (zmq/context 1)
+        proto-ctx	  {:signer signer, :checker checker}
+        sh-ep             (str "tcp://127.0.0.1:" (-> config :shell_port))
+        io-ep             (str "tcp://127.0.0.1:" (-> config :iopub_port))
+        preq              (promise)
+        psub              (promise)
+        result            (atom nil)]
+    (log/set-level! :warn)
+    (with-open [shell (-> (zmq/socket ctx :req) (zmq/connect sh-ep)) 
+                sub   (-> (zmq/socket ctx :sub) (zmq/connect io-ep))] 
+      (try
+        (let [transport (zmqc/make-zmq-transport proto-ctx shell)]
+          (T/send-req transport "execute_request" {:encoded-jupyter-message msg})
+          (cl-format *out* "~%Send completes.")
+          (future (deliver preq (-> (T/receive-req transport)
+                                    (dissoc :jupyter-client.util/zmq-raw-message))))
+          (future (deliver psub (-> (T/receive-iopub transport)
+                                    (dissoc :jupyter-client.util/zmq-raw-message))))
+          (reset! result {:res (deref preq 5000 :timeout)
+                          :sub (deref psub 5000 :timeout)}))
+        (finally ; This doesn't seem to run when I interrupt with read on iopub
+          (cl-format *out* "~%Cleanup")
+          (zmq/disconnect shell sh-ep)
+          (zmq/set-linger shell 0)
+          (zmq/close shell)
+          @result)))))
 
 (def hey
   (let [config (-> "./resources/connect.json"
