@@ -123,9 +123,10 @@
                                      first :content :text)))
           (reset! result {:status (deref preq timeout-ms :timeout)
                           :stdout (deref psub timeout-ms :no-output)}))
-        (finally 
-          (map #(do (zmq/disconnect %1 %2)
-                    (zmq/set-linger %1 0)
-                    (zmq/close %1))
-               [shell sub] [sh-ep io-ep])
+        (finally
+          (doall
+           (map #(do (zmq/disconnect %1 %2)
+                     (zmq/set-linger %1 0)
+                     (zmq/close %1))
+                [shell sub] [sh-ep io-ep]))
           @result)))))
