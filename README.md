@@ -15,6 +15,9 @@ against a jupyter kernel and view what comes back from the kernel's stdout (if a
 Returns `{:status :ok, :stdout "Greetings from Clojure!\n"}` and sets the variable foobar in the kernel.
 (Note that this example is running against a Python kernel.)
 
+Some of the code here was borrowed from the [clojupyter project](https://github.com/clojupyter/clojupyter).
+Thanks to everyone involved. 
+
 Limitations:
 
 Limitation 1: The code doesn't currently generate signed messages correctly. Therefore, it is necessary
