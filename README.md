@@ -8,8 +8,8 @@ This library allows you to run execute_requests against a jupyter kernel.
 
 ```clojure
 (req-msg :config-file "/Users/pdenno/Library/Jupyter/runtime/kernel-5aae1612-b3e1-46a1-b926-c6ab30a94d7e.json"
-	                             :code (str "foobar = 'Greetings from Clojure!'\n"
-                                                "print(foobar)"))
+         :code (str "foobar = 'Greetings from Clojure!'\n"
+                    "print(foobar)"))
 ```
 Returns `{:status :ok, :stdout "Greetings from Clojure!\n"}` and sets the variable foobar in the kernel.
 (Note that this example is running against a Python kernel.)
@@ -25,7 +25,7 @@ by the following line in ~/.jupyter/jupyter_notebook_config.py:
 Similarly, if you are using jupyter console, or perhaps clojupyter (that not yet been tested) connect.json
 should contain `"key": "",`. 
 
-Limitation 2: No tests in the testing directory. 
+Limitation 2: I have provided no tests in the testing directory. Shame on me. I'll fix it soon, I hope.
 
 ## License
 
