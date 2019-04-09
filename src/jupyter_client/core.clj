@@ -74,6 +74,7 @@
 ;;; The frontend is not required to support this, but if it does not, it must set 'allow_stdin' : False
 
 (defn make-msg
+  "Complete all the easy parts of a message."
   [config code signer]
   (as-> EXE-MSG ?msg
     (assoc ?msg :envelope [(-> config :key .getBytes)])
@@ -97,8 +98,8 @@
                              slurp
                              u/parse-json-str
                              walk/keywordize-keys
-                             (update :key #(clojure.string/replace % #"-" "")))
-        [signer checker]  (u/make-signer-checker (:key config))
+                             (update :key #(clojure.string/replace % #"-" ""))) ; Questionable.
+        [signer checker]  (u/make-signer-checker (:key config)) ; Signing does not work. I use key=''
         msg               (-> (make-msg config code signer)
                               MB/encode-jupyter-message)
         ctx               (zmq/context 1)
@@ -120,9 +121,9 @@
                                      (map #(dissoc % :jupyter-client.util/zmq-raw-message))
                                      (filter #(= "stream" (-> % :header :msg_type)))
                                      first :content :text)))
-          (reset! result {:response-status (deref preq timeout-ms :timeout)
-                          :stdout          (deref psub timeout-ms :no-output)}))
-        (finally ; This doesn't seem to run when I interrupt with read on iopub
+          (reset! result {:status (deref preq timeout-ms :timeout)
+                          :stdout (deref psub timeout-ms :no-output)}))
+        (finally 
           (map #(do (zmq/disconnect %1 %2)
                     (zmq/set-linger %1 0)
                     (zmq/close %1))
