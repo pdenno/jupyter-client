@@ -47,20 +47,24 @@
                     (zmq/send socket seg more?)))]
     (doall (map send-it segments (range)))))
 
-(defrecord zmq-transport [S req-socket parent-message]
+(defrecord zmq-transport [S req-socket sub-socket parent-message]
   T/Transport
-  (T/send* [_ socket resp-msgtype {:keys [encoded-jupyter-message]}] ; POD resp_msgtype not used.
-      (when (not= socket :req) 
-        (throw (ex-info (str "send*: Unknown socket " socket ".") {:socket socket})))
-    (send-segments req-socket encoded-jupyter-message))
+  (T/send* [_ socket resp-msgtype {:keys [encoded-jupyter-message]}]
+    (let [socket (case socket
+                   :req	req-socket
+                   :sub	sub-socket
+                   (throw (ex-info (str "send*: Unknown socket " socket ".") {:socket socket})))]
+    (send-segments socket encoded-jupyter-message)))
   (T/receive* [_ socket]
-    (when (not= socket :req) 
-      (throw (ex-info (str "send*: Unknown socket " socket ".") {:socket socket})))
-    (-> (receive-jupyter-message req-socket 0)
-        u/build-message)))
+    (let [socket (case socket
+                   :req	req-socket
+                   :sub	sub-socket
+                   (throw (ex-info (str "send*: Unknown socket " socket ".") {:socket socket})))]
+      (-> (receive-jupyter-message socket 0)
+          u/build-message))))
 
 (alter-meta! #'->zmq-transport #(assoc % :private true))
 
 (defn make-zmq-transport
-  [S req-socket]
-  (->zmq-transport S req-socket nil))
+  [S req-socket sub-socket]
+  (->zmq-transport S req-socket sub-socket nil))

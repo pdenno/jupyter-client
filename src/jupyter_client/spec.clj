@@ -7,8 +7,7 @@
 (s/def ::jupyter-config		(s/keys :req-un [::control_port ::shell_port ::stdin_port ::iopub_port ::hb_port
                                                  ::ip ::transport ::key]))
 
-(s/def ::ctx			(s/keys :req-un [::nrepl-comm ::transport ::checker ::signer
-                                                 ::parent-message]
+(s/def ::ctx			(s/keys :req-un [::transport ::checker ::signer ::parent-message]
                                         :opt-un [ ::msgtype]))
 
 (s/def ::msg_id			string?)

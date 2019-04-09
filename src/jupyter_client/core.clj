@@ -2,6 +2,7 @@
   (:require
    [clojure.pprint		   :refer [pprint cl-format]]
    [clojure.walk		   :as walk]
+   [clojure.spec.alpha		   :as s]
    [cheshire.core		   :as cheshire]
    [pandect.algo.sha256		   :refer [sha256-hmac]]
    [taoensso.timbre		   :as log]
@@ -12,24 +13,16 @@
    [jupyter-client.middleware	   :as MB]
    [jupyter-client.zmq-client      :as zmqc]))
 
-;;; "4fb56c501d3340d398bb8d3742cd9e50" The :envelope byte array is the same as the session.
-;;; Thus I need to replace it. 
-(def EXE-MSG {;:envelope 
-;;;             [(byte-array [52, 102, 98, 53, 54, 99, 53, 48, 49, 100, 51, 51, 52, 48, 100, 51,
-;;;                            57, 56, 98, 98, 56, 100, 51, 55, 52, 50, 99, 100, 57, 101, 53, 48])],
-              :delimiter "<IDS|MSG>",
-              :signature ; connect.json says "signature_scheme": "hmac-sha256",
-              "5a98d552a77da7f1595030a8771f4ef861a5ca406d13b1001d4acfa7a58ace88",  
+(def diag (atom nil))
+
+(def EXE-MSG {:delimiter "<IDS|MSG>",
               :header
-              {:msg_id "e93eb6ef140940518bb379ae9c962a7d",
-               :username "username",
-;;;            :session "4fb56c501d3340d398bb8d3742cd9e50", ; to be replaced with connect.json/key
+              {:username "username",
                :msg_type "execute_request",
                :version "5.2"},
               :parent-header {},
               :content
-              {:code "(+ 1 2 3)",
-               :silent false,
+              {:silent false,
                :store_history true,
                :user_expressions {},
                :allow_stdin true,
@@ -77,65 +70,61 @@
 ;;; What really matters is the messaging pattern used. (e.g. :rep, :req, :pair).
 ;;; You can do both send and recv with server/client doing respectively bind/connect with :rep/:req.
 
-(declare msg-tryme)
-
 ;;; stdin messages are unique in that the request comes from the kernel, and the reply from the frontend.
 ;;; The frontend is not required to support this, but if it does not, it must set 'allow_stdin' : False
 
-(defn trytry []
-  (msg-tryme :code "file = open('/Users/pdenno/Documents/git/jupyter-client/testfile.txt','w')")
-  (msg-tryme :code "file.write(foo)")
-  (msg-tryme :code "file.close()"))
+(defn make-msg
+  [config code signer]
+  (as-> EXE-MSG ?msg
+    (assoc ?msg :envelope [(-> config :key .getBytes)])
+    (assoc-in ?msg [:header :session] (:key config))
+    (assoc-in ?msg [:header :msg_id] (u/uuid))
+    (assoc-in ?msg [:header :version] u/PROTOCOL-VERSION)
+    (assoc-in ?msg [:content :code] code)
+    (assoc-in ?msg [:content :allow_stdin] false)
+    (assoc ?msg :signature (signer (:header ?msg) ; ; sig not working. Use '' for key. 
+                                   (:parent-header ?msg)
+                                   {} ; metadata
+                                   (:content ?msg)))))
 
-(defn msg-tryme [& {:keys [code config-file] :or {config-file "./resources/connect.json",
-                                                  code "print('Greetings from Clojure!')"}}]
+(defn req-msg
+  "Send an execute_request to the kernel. Return status and stdout side-effects."
+  [& {:keys [code config-file timeout-ms]
+      :or {timeout-ms 1000
+           config-file "./resources/connect.json",
+           code "print('Greetings from Clojure!')"}}]
   (let [config           (-> config-file
                              slurp
                              u/parse-json-str
                              walk/keywordize-keys
                              (update :key #(clojure.string/replace % #"-" "")))
         [signer checker]  (u/make-signer-checker (:key config))
-        msg               (as-> EXE-MSG ?msg
-                            (assoc ?msg :envelope [(-> config :key .getBytes)])
-                            (assoc-in ?msg [:header :session] (:key config))
-                            (assoc-in ?msg [:content :code] code)
-                            (assoc-in ?msg [:content :allow_stdin] false)
-                            (assoc ?msg :signature (signer (:header ?msg) (:parent-header ?msg) {} {})) ; Not working.
-                            (MB/encode-jupyter-message ?msg))
+        msg               (-> (make-msg config code signer)
+                              MB/encode-jupyter-message)
         ctx               (zmq/context 1)
         proto-ctx	  {:signer signer, :checker checker}
-        sh-ep             (str "tcp://127.0.0.1:" (-> config :shell_port))
-        io-ep             (str "tcp://127.0.0.1:" (-> config :iopub_port))
-        preq              (promise)
-        psub              (promise)
+        [sh-ep io-ep]     (mapv #(str "tcp://127.0.0.1:" (-> config %)) [:shell_port :iopub_port])
+        [preq psub]       [(promise) (promise)]
         result            (atom nil)]
     (log/set-level! :warn)
     (with-open [shell (-> (zmq/socket ctx :req) (zmq/connect sh-ep)) 
-                sub   (-> (zmq/socket ctx :sub) (zmq/connect io-ep))] 
+                sub   (-> (zmq/socket ctx :sub) (zmq/connect io-ep))]
       (try
-        (let [transport (zmqc/make-zmq-transport proto-ctx shell)]
+        (zmq/subscribe sub "")
+        (let [transport (zmqc/make-zmq-transport proto-ctx shell sub)]
           (T/send-req transport "execute_request" {:encoded-jupyter-message msg})
-          (cl-format *out* "~%Send completes.")
-          (future (deliver preq (-> (T/receive-req transport)
-                                    (dissoc :jupyter-client.util/zmq-raw-message))))
-          (future (deliver psub (-> (T/receive-iopub transport)
-                                    (dissoc :jupyter-client.util/zmq-raw-message))))
-          (reset! result {:res (deref preq 5000 :timeout)
-                          :sub (deref psub 5000 :timeout)}))
+          (future (deliver preq (-> (T/receive-req transport) :content :status keyword)))
+          (future (deliver psub (->> [(T/receive-iopub transport)  ; POD I *assume* the req generates three pub responses:
+                                      (T/receive-iopub transport)  ; status, execute_input, stream. If less, it will 
+                                      (T/receive-iopub transport)] ; probably time out. 
+                                     (map #(dissoc % :jupyter-client.util/zmq-raw-message))
+                                     (filter #(= "stream" (-> % :header :msg_type)))
+                                     first :content :text)))
+          (reset! result {:response-status (deref preq timeout-ms :timeout)
+                          :stdout          (deref psub timeout-ms :no-output)}))
         (finally ; This doesn't seem to run when I interrupt with read on iopub
-          (cl-format *out* "~%Cleanup")
-          (zmq/disconnect shell sh-ep)
-          (zmq/set-linger shell 0)
-          (zmq/close shell)
+          (map #(do (zmq/disconnect %1 %2)
+                    (zmq/set-linger %1 0)
+                    (zmq/close %1))
+               [shell sub] [sh-ep io-ep])
           @result)))))
-
-(def hey
-  (let [config (-> "./resources/connect.json"
-                   slurp
-                   u/parse-json-str
-                   walk/keywordize-keys
-                   (update :key #(clojure.string/replace % #"-" "")))]
-    (-> EXE-MSG
-        (assoc :envelope [(-> config :key .getBytes)])
-        (assoc-in [:header :session] (:key config))
-        (assoc-in [:content :code] "foo"))))
