@@ -1,13 +1,12 @@
-(ns jupyter-client.middleware
+(ns pdenno.jupyter-client.middleware
   (:require
    [clojure.pprint		 :as pp	:refer [pprint cl-format]]
    [clojure.spec.alpha		 :as s]
    [taoensso.timbre		 :as log]
-   [jupyter-client.spec	         :as sp]
-   [jupyter-client.util	         :as u]
-   [jupyter-client.transport	 :as tp :refer [handler-when 
-                                                ;response-mapping-transport
-                                                parent-msgtype-pred]]))
+   [pdenno.jupyter-client.spec	         :as sp]
+   [pdenno.jupyter-client.util	         :as u]
+   [pdenno.jupyter-client.transport	 :as tp :refer [handler-when 
+                                                        parent-msgtype-pred]]))
 
 ;;; ---------------------------------------------------------------------------------
 ;;; Base

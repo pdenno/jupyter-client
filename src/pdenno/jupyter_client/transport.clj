@@ -1,8 +1,8 @@
-(ns jupyter-client.transport
+(ns pdenno.jupyter-client.transport
   (:refer-clojure :exclude [send])
   (:require
    [clojure.pprint		:as pp	:refer [pprint cl-format]]
-   [jupyter-client.util  	:as u]))
+   [pdenno.jupyter-client.util 	:as u]))
 
 (defprotocol Transport
   (send* [_ socket msgtype message]

@@ -1,12 +1,35 @@
 # jupyter-client
 
-A Clojure library to interact with a jupyter kernel
+A Clojure library to interact with a jupyter kernel.
+
+This library allows you to run execute_requests against a jupyter kernel. 
 
 ## Usage
 
-FIXME
+```clojure
+(req-msg :config-file "/Users/pdenno/Library/Jupyter/runtime/kernel-5aae1612-b3e1-46a1-b926-c6ab30a94d7e.json"
+	                             :code (str "foobar = 'Greetings from Clojure!'\n"
+                                                "print(foobar)"))
+```
+Returns `{:status :ok, :stdout "Greetings from Clojure!\n"}` and sets the variable foobar in the kernel.
+(Note that this example is running against a Python kernel.)
+
+Limitations:
+
+Limitation 1: The code doesn't currently generate signed messages correctly. Therefore, it is necessary
+to turn signature checking off in the kernel. For a jupyter lab kernel, for example, this is achieved
+by the following line in ~/.jupyter/jupyter_notebook_config.py:
+
+`c.Session.key = b''`
+
+Similarly, if you are using jupyter console, or perhaps clojupyter (that not yet been tested) connect.json
+should contain `"key": "",`. 
+
+Limitation 2: No tests in the testing directory. 
 
 ## License
+
+EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0
 
 Copyright © 2019 Peter Denno
 

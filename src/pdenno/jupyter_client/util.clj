@@ -1,12 +1,12 @@
-(ns jupyter-client.util
+(ns pdenno.jupyter-client.util
   (:require
-   [cheshire.core	   :as cheshire]
-   [clojure.pprint	   :as pp]
-   [pandect.algo.sha256	   :refer [sha256-hmac]]
-   [clojure.spec.alpha	   :as s]
-   [java-time		   :as jtm]
-   [jupyter-client.spec    :as sp]
-   [omniconf.core	   :as cfg])
+   [cheshire.core	       :as cheshire]
+   [clojure.pprint	       :as pp]
+   [pandect.algo.sha256	       :refer [sha256-hmac]]
+   [clojure.spec.alpha	       :as s]
+   [java-time		       :as jtm]
+   [pdenno.jupyter-client.spec :as sp]
+   [omniconf.core	       :as cfg])
   (:import [java.time.format DateTimeFormatter]))
 
 (defn log-traffic?

@@ -1,4 +1,4 @@
-(ns jupyter-client.spec
+(ns pdenno.jupyter-client.spec
   (:require
    [clojure.spec.alpha			:as s]))
 

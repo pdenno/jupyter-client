@@ -1,4 +1,4 @@
-(ns jupyter-client.core
+(ns pdenno.jupyter-client.core
   (:require
    [clojure.pprint		   :refer [pprint cl-format]]
    [clojure.walk		   :as walk]
@@ -8,10 +8,10 @@
    [taoensso.timbre		   :as log]
    [zeromq.zmq			   :as zmq]
    
-   [jupyter-client.util	           :as u]
-   [jupyter-client.transport	   :as T]
-   [jupyter-client.middleware	   :as MB]
-   [jupyter-client.zmq-client      :as zmqc]))
+   [pdenno.jupyter-client.util	          :as u]
+   [pdenno.jupyter-client.transport	  :as T]
+   [pdenno.jupyter-client.middleware	  :as MB]
+   [pdenno.jupyter-client.zmq-client      :as zmqc]))
 
 (def diag (atom nil))
 
