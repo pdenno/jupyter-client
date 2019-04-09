@@ -2,7 +2,8 @@
 
 A Clojure library to interact with a jupyter kernel.
 
-This library allows you to run execute_requests against a jupyter kernel. 
+This library allows you to run [execute_requests](https://jupyter-client.readthedocs.io/en/stable/messaging.html)
+against a jupyter kernel. 
 
 ## Usage
 
