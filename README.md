@@ -24,9 +24,9 @@ execution was successful and `:stdout` contains the string printed to stdout.
 Some of the code here was borrowed from the [clojupyter project](https://github.com/clojupyter/clojupyter).
 Thanks to everyone involved. 
 
-Limitations:
+## Limitations
 
-Limitation 1: The code doesn't currently generate signed messages correctly. Therefore, it is necessary
+*Limitation 1:* The code doesn't currently generate signed messages correctly. Therefore, it is necessary
 to turn signature checking off in the kernel. For a [JupyterLab](https://jupyterlab.readthedocs.io/en/latest/) kernel, for example, this is achieved
 by uncommenting the following line in ~/.jupyter/jupyter_notebook_config.py:
 
@@ -35,7 +35,7 @@ by uncommenting the following line in ~/.jupyter/jupyter_notebook_config.py:
 Similarly, if you are using jupyter console, or perhaps clojupyter (that not yet been tested) connect.json
 should contain `"key": "",`. 
 
-Limitation 2: I have provided no tests in the testing directory. Shame on me. I'll fix it soon, I hope.
+*Limitation 2:* I have provided no tests in the testing directory. Shame on me. I'll fix it soon, I hope.
 
 ## License
 
