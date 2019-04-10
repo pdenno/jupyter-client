@@ -8,14 +8,18 @@ against a jupyter kernel and view what (if anything) comes back from the kernel'
 
 ## Usage
 
+The example below returns `{:status :ok, :stdout "Greetings from Clojure!\n"}`. The example references the connection file of a running kernel (argument `:config-file` below) and executes the code specified by `:code`.
+
+
 ```clojure
 (req-msg :config-file "/Users/pdenno/Library/Jupyter/runtime/kernel-5aae1612-b3e1-46a1-b926-c6ab30a94d7e.json"
          :code (str "foobar = 'Greetings from Clojure!'\n"
                     "print(foobar)"))
 ```
-Returns `{:status :ok, :stdout "Greetings from Clojure!\n"}` and sets the variable foobar in the kernel.
-(Note that this example is running against a
-[IPython kernel](https://jupyter.readthedocs.io/en/latest/architecture/how_jupyter_ipython_work.html#the-ipython-kernel).)
+Note that this example is running against a
+[IPython kernel](https://jupyter.readthedocs.io/en/latest/architecture/how_jupyter_ipython_work.html#the-ipython-kernel).
+In the returned map, `:status` value `:ok` indicates that
+execution was successful and `:stdout` contains the string printed to stdout.
 
 Some of the code here was borrowed from the [clojupyter project](https://github.com/clojupyter/clojupyter).
 Thanks to everyone involved. 
