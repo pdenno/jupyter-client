@@ -2,7 +2,8 @@
 
 A Clojure library to interact with a jupyter kernel.
 
-This library allows you to run [execute_requests](https://jupyter-client.readthedocs.io/en/stable/messaging.html)
+For use with [Jupyter Notebooks](https://jupyter.org), this library allows you to run
+[execute_requests](https://jupyter-client.readthedocs.io/en/stable/messaging.html)
 against a jupyter kernel and view what comes back from the kernel's stdout (if anything). 
 
 ## Usage
@@ -13,7 +14,8 @@ against a jupyter kernel and view what comes back from the kernel's stdout (if a
                     "print(foobar)"))
 ```
 Returns `{:status :ok, :stdout "Greetings from Clojure!\n"}` and sets the variable foobar in the kernel.
-(Note that this example is running against a Python kernel.)
+(Note that this example is running against a
+[IPython kernel](https://jupyter.readthedocs.io/en/latest/architecture/how_jupyter_ipython_work.html#the-ipython-kernel).)
 
 Some of the code here was borrowed from the [clojupyter project](https://github.com/clojupyter/clojupyter).
 Thanks to everyone involved. 
