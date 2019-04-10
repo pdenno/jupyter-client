@@ -2,9 +2,9 @@
 
 A Clojure library to interact with a jupyter kernel.
 
-For use with [Jupyter Notebooks](https://jupyter.org), this library allows you to run
+For use with [Jupyter Notebooks](https://jupyter.org), this library allows one to run
 [execute_requests](https://jupyter-client.readthedocs.io/en/stable/messaging.html)
-against a jupyter kernel and view what comes back from the kernel's stdout (if anything). 
+against a jupyter kernel and view what (if anything) comes back from the kernel's stdout. 
 
 ## Usage
 
@@ -23,8 +23,8 @@ Thanks to everyone involved.
 Limitations:
 
 Limitation 1: The code doesn't currently generate signed messages correctly. Therefore, it is necessary
-to turn signature checking off in the kernel. For a jupyter lab kernel, for example, this is achieved
-by the following line in ~/.jupyter/jupyter_notebook_config.py:
+to turn signature checking off in the kernel. For a [JupyterLab](https://jupyterlab.readthedocs.io/en/latest/) kernel, for example, this is achieved
+by uncommenting the following line in ~/.jupyter/jupyter_notebook_config.py:
 
 `c.Session.key = b''`
 
@@ -35,7 +35,7 @@ Limitation 2: I have provided no tests in the testing directory. Shame on me. I'
 
 ## License
 
-EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0
+EPL-2.0 OR GPL-2.0-or-later with Classpath-exception-2.0
 
 Copyright © 2019 Peter Denno
 
