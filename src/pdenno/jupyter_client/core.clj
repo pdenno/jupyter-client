@@ -13,8 +13,6 @@
    [pdenno.jupyter-client.middleware	  :as MB]
    [pdenno.jupyter-client.zmq-client      :as zmqc]))
 
-(def diag (atom nil))
-
 (def EXE-MSG {:delimiter "<IDS|MSG>",
               :header
               {:username "username",
@@ -30,28 +28,42 @@
 
 (declare wait-response)
 
-;;; (heartbeat? (-> "./resources/connect.json" slurp u/parse-json-str walk/keywordize-keys))
+(defn config-from-file
+  "Return a config map for the argument json connection file."
+  [config-file]
+  (-> config-file
+      slurp
+      u/parse-json-str
+      walk/keywordize-keys
+      #_(update :key #(clojure.string/replace % #"-" "")))) ; Questionable.
+  
+;;; (heartbeat? :once? true :config-file "/Users/pdenno/Library/Jupyter/runtime/kernel-437b1cfd-137e-48d8-b461-7f8c18a28f9b.json")
 (defn heartbeat?
   "Clients send ping messages on a REQ socket, which are echoed right back from the Kernel’s REP socket.
    These are simple bytestrings, not full JSON messages...
    Heartbeat: This socket allows for simple bytestring messages to be sent between the frontend and
    the kernel to ensure that they are still connected."
-  [config]
-  (let [ctx    (zmq/context 1)
+  [& {:keys [once? config-file verbose?]}]
+  (let [config (config-from-file config-file)
+        ctx    (zmq/context 1)
         hb-ep  (str "tcp://127.0.0.1:" (:hb_port config))]
     (with-open [HB (-> (zmq/socket ctx :req)
                        (zmq/connect hb-ep))]
       (try
-        (while (not (.. Thread currentThread isInterrupted))
-          (zmq/send-str HB "ping") ; This is send with (.getBytes <string>).
-          (Thread/sleep 1000)
-          (let [resp (wait-response HB 5000)]
-            (if (= :timeout resp) (println "%Timeout") (println resp))))
+        (if once?
+          (do (zmq/send-str HB "ping") ; This is send with (.getBytes <string>).
+              (let [resp (wait-response HB 500)]
+                (if (= :timeout resp) nil true)))
+          (while (not (.. Thread currentThread isInterrupted))
+            (zmq/send-str HB "ping") ; This is send with (.getBytes <string>).
+            (Thread/sleep 1000)
+            (let [resp (wait-response HB 5000)]
+              (if (= :timeout resp) (println "%Timeout") (println resp)))))
         (finally
-          (println "Disconnecting")
+          (when verbose? (println "Disconnecting"))
           (zmq/disconnect HB hb-ep)
-          (zmq/close HB)
-          (zmq/destroy ctx))))))
+          (zmq/set-linger HB 0)
+          (zmq/close HB))))))
 
 (defn wait-response
   "zmq/receive-str within timeout or return :timeout."
@@ -90,15 +102,11 @@
 
 (defn req-msg
   "Send an execute_request to the kernel. Return status and stdout side-effects."
-  [& {:keys [code config-file timeout-ms]
+  [& {:keys [code config-file timeout-ms verbose?]
       :or {timeout-ms 1000
            config-file "./resources/connect.json",
            code "print('Greetings from Clojure!')"}}]
-  (let [config           (-> config-file
-                             slurp
-                             u/parse-json-str
-                             walk/keywordize-keys
-                             (update :key #(clojure.string/replace % #"-" ""))) ; Questionable.
+  (let [config            (config-from-file config-file)
         [signer checker]  (u/make-signer-checker (:key config)) ; Signing does not work. I use key=''
         msg               (-> (make-msg config code signer)
                               MB/encode-jupyter-message)
@@ -124,6 +132,7 @@
           (reset! result {:status (deref preq timeout-ms :timeout)
                           :stdout (deref psub timeout-ms :no-output)}))
         (finally
+          (when verbose? (println "Disconnecting"))
           (doall
            (map #(do (zmq/disconnect %1 %2)
                      (zmq/set-linger %1 0)
