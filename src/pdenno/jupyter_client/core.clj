@@ -49,6 +49,7 @@
         hb-ep  (str "tcp://127.0.0.1:" (:hb_port config))]
     (with-open [HB (-> (zmq/socket ctx :req)
                        (zmq/connect hb-ep))]
+      (zmq/set-linger HB 0)
       (try
         (if once?
           (do (zmq/send-str HB "ping") ; This is send with (.getBytes <string>).
@@ -61,8 +62,9 @@
               (if (= :timeout resp) (println "%Timeout") (println resp)))))
         (finally
           (when verbose? (println "Disconnecting"))
+          (zmq/receive HB zmq/dont-wait)
           (zmq/disconnect HB hb-ep)
-          (zmq/set-linger HB 0)
+          (zmq/destroy ctx)
           (zmq/close HB))))))
 
 (defn wait-response
@@ -134,8 +136,9 @@
         (finally
           (when verbose? (println "Disconnecting"))
           (doall
-           (map #(do (zmq/disconnect %1 %2)
-                     (zmq/set-linger %1 0)
+           (map #(do (zmq/receive %1 zmq/dont-wait)
+                     (zmq/disconnect %1 %2)
                      (zmq/close %1))
                 [shell sub] [sh-ep io-ep]))
+          (zmq/destroy ctx)
           @result)))))
