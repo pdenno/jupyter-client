@@ -19,8 +19,8 @@
                  (future-cancel @fut)
                  (reset! fut nil)))))
 
-(defn blocking-server-loop
-  "Return a function that listens on port and runs (blocking) response-fn in a loop."
+(defn magic-server-loop
+  "Return a function that listens on port and runs response-fn in a loop."
   [port response-fn skey]
   (fn []
     (let [ctx (zmq/context 1)
@@ -55,19 +55,7 @@
   (let [skey (str (java.util.UUID/randomUUID))]
     (map->Magic-Server
      {:port port
-      :server-fn (blocking-server-loop port response-fn skey)
+      :server-fn (magic-server-loop port response-fn skey)
       :stop-key skey
       :fut (atom nil)})))
 
-;;; ======================================
-
-(def response-cnt (atom 0))
-(defn %%run_mzn-response-fn
-  "Example server response fn"
-  [arg]
-  (swap! response-cnt inc)
-  (log/info (str "Responding to " @response-cnt " " arg))
-  (Thread/sleep 500)
-  (str "Done " @response-cnt))
-
-(def magic-server (make-magic-server 3178 %%run_mzn-response-fn))
