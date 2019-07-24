@@ -1,8 +1,11 @@
 (ns pdenno.jupyter-client.magic
   "A rather vanilla zmq server useful for responding to Ipython magic"
   (:require
-   [clojure.tools.logging  :as log]
-   [zeromq.zmq             :as zmq]))
+   [clojure.tools.logging      :as log]
+   [zeromq.zmq                 :as zmq]
+   [pdenno.jupyter-client.util :as util]))
+
+;;; ToDo: Fix the problem where old messages (stop uuid strings mostly) aren't cleared. 
 
 (defprotocol Blocking-Server
   (start [this])
@@ -19,6 +22,10 @@
                  (future-cancel @fut)
                  (reset! fut nil)))))
 
+;;; https://blog.scottlogic.com/2015/03/20/ZeroMQ-Quick-Intro.html
+;;; Contexts help manage any sockets that are created as well as the number of threads ZeroMQ uses behind the scenes.
+;;; Create one when you initialize a process and destroy it as the process is terminated. Contexts can be shared between
+;;; threads and, in fact, are the only ZeroMQ objects that can safely do this.
 (defn magic-server-loop
   "Return a function that listens on port and runs response-fn in a loop."
   [port response-fn skey]
@@ -33,20 +40,22 @@
           (zmq/receive socket zmq/dont-wait) 
           (while @keep-running? 
             (let [request (zmq/receive-str socket)]
-              (if (= request skey)
-                (swap! keep-running? not)
-                (do (log/info (str "Received request" request))
+              (cond (= request skey) (swap! keep-running? not),
+                    (util/uuid-ish? request) ; Ugh! Leftover still not cleared! Do nothing.
+                    (log/info "Discarding a uuid.")
+                    :else
                     (let [resp (response-fn request)]
-                      (if (string? resp)
-                        (zmq/send-str socket resp)
-                        (zmq/send-str (str "Server response is invalid:" resp))))))))
+                      (do (log/info (str "Received request" request))
+                          (if (string? resp)
+                            (zmq/send-str socket resp)
+                            (zmq/send-str (str "Server response is invalid:" resp))))))))
           (finally
             (log/info "Stopping myself")
             (-> socket
-                (zmq/receive zmq/dont-wait)
-                (zmq/disconnect endpoint)
+                ;(zmq/receive zmq/dont-wait)
+                ;(zmq/disconnect endpoint)
                 (zmq/unbind     endpoint))
-            (zmq/destroy ctx)
+            ;(zmq/destroy ctx)
             (zmq/close socket)))))))
 
 (defn make-magic-server

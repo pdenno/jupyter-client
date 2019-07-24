@@ -36,8 +36,9 @@
       u/parse-json-str
       walk/keywordize-keys
       #_(update :key #(clojure.string/replace % #"-" "")))) ; Questionable.
-  
-;;; (heartbeat? :once? true :config-file "/Users/pdenno/Library/Jupyter/runtime/kernel-437b1cfd-137e-48d8-b461-7f8c18a28f9b.json")
+
+;;; Linux (heartbeat? :once? true :config-file "/home/pdenno/.local/share/jupyter/runtime/kernel-89e0f64d-5505-4bd6-bcc3-eb998d7bfe12.json")
+;;; Mac:  (heartbeat? :once? true :config-file "/Users/pdenno/Library/Jupyter/runtime/kernel-437b1cfd-137e-48d8-b461-7f8c18a28f9b.json")
 (defn heartbeat?
   "Clients send ping messages on a REQ socket, which are echoed right back from the Kernel’s REP socket.
    These are simple bytestrings, not full JSON messages...
@@ -62,9 +63,9 @@
               (if (= :timeout resp) (println "%Timeout") (println resp)))))
         (finally
           (when verbose? (println "Disconnecting"))
-          (zmq/receive HB zmq/dont-wait)
+          ;(zmq/receive HB zmq/dont-wait) ; 2019-0724 nope.
           (zmq/disconnect HB hb-ep)
-          (zmq/destroy ctx)
+          ;(zmq/destroy ctx)              ; 2019-0724 nope.
           (zmq/close HB))))))
 
 (defn wait-response
@@ -136,9 +137,9 @@
         (finally
           (when verbose? (println "Disconnecting"))
           (doall
-           (map #(do (zmq/receive %1 zmq/dont-wait)
+           (map #(do #_(zmq/receive %1 zmq/dont-wait) ; 2019-07-23
                      (zmq/disconnect %1 %2)
                      (zmq/close %1))
                 [shell sub] [sh-ep io-ep]))
-          (zmq/destroy ctx)
+          #_(zmq/destroy ctx)  ; 2019-07-23
           @result)))))

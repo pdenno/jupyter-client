@@ -1,7 +1,7 @@
 (ns pdenno.jupyter-client.util
   (:require
    [cheshire.core	       :as cheshire]
-   [clojure.pprint	       :as pp]
+   [clojure.pprint	       :as pp :refer [cl-format]]
    [pandect.algo.sha256	       :refer [sha256-hmac]]
    [clojure.spec.alpha	       :as s]
    [java-time		       :as jtm]
@@ -72,6 +72,16 @@
 (defn set-var-indent!
   [indent-style var]
   (alter-meta! var #(assoc % :style/indent indent-style)))
+
+(def uuid-pat
+  (re-pattern
+   (apply cl-format nil "^~A{8}\\-~A{4}\\-~A{4}\\-~A{4}\\-~A{12}$"
+          (repeat 5 "[0123456789abcdefg]"))))
+
+(defn uuid-ish?
+  "Return true if the string looks like a Java Random UUID"
+  [str]
+  (re-matches uuid-pat str))
 
 ;;; ---------------------------------------------------------------------------------
 ;;; From clojupyter.kernel.jupyter

@@ -13,7 +13,7 @@
                  [org.zeromq/jeromq             "0.5.0"]
                  [pandect                       "0.6.1"]]
 
-  :repl-options {:init-ns jupyter-client.core}
+  :repl-options {:init-ns pdenno.jupyter-client.core}
   :profiles     {:dev           {:dependencies [[midje "1.9.6" :exclusions [org.clojure/clojure]]]
                                  :plugins [[lein-midje "3.2.1"]
                                            [com.roomkey/lein-v "7.0.0"]]}})
