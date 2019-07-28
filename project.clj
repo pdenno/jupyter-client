@@ -7,8 +7,6 @@
                  [cheshire                      "5.8.1"]
                  [clojure.java-time             "0.3.2"]
                  [org.clojure/tools.logging     "0.4.1"]
-                 [com.grammarly/omniconf        "0.3.2"]
-                 [com.taoensso/timbre           "4.10.0"]
                  [org.zeromq/cljzmq             "0.1.4" :exclusions [org.zeromq/jzmq]]
                  [org.zeromq/jeromq             "0.5.0"]
                  [pandect                       "0.6.1"]]

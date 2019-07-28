@@ -2,9 +2,8 @@
   (:require
    [clojure.pprint		 :as pp	:refer [pprint cl-format]]
    [clojure.spec.alpha		 :as s]
-   [taoensso.timbre		 :as log]
    [pdenno.jupyter-client.spec	         :as sp]
-   [pdenno.jupyter-client.util	         :as u]
+   [pdenno.jupyter-client.util	         :as util]
    [pdenno.jupyter-client.transport	 :as tp :refer [handler-when 
                                                         parent-msgtype-pred]]))
 
@@ -13,17 +12,17 @@
 ;;; ---------------------------------------------------------------------------------
 #_(defn jupyter-message
   [{:keys [parent-message signer] :as ctx} resp-socket resp-msgtype response]
-  (let [session-id	(u/message-session parent-message)
-        header 		{:date (u/now)
-                         :version u/PROTOCOL-VERSION
-                         :msg_id (u/uuid)
+  (let [session-id	(util/message-session parent-message)
+        header 		{:date (util/now)
+                         :version util/PROTOCOL-VERSION
+                         :msg_id (util/uuid)
                          :username "user"
                          :session session-id
                          :msg_type resp-msgtype}
-        parent-header	(u/message-header parent-message)
+        parent-header	(util/message-header parent-message)
         metadata	{}
         ]
-    {:envelope (if (= resp-socket :req) (u/message-envelope parent-message) [(u/>bytes resp-msgtype)])
+    {:envelope (if (= resp-socket :req) (util/message-envelope parent-message) [(util/>bytes resp-msgtype)])
      :delimiter "<IDS|MSG>"
      :signature (signer header parent-header metadata response)
      :header header
@@ -39,28 +38,5 @@
         payload		(rest segments)
         result  (vec (concat envelope
                              (for [p payload]
-                               (u/>bytes p))))]
+                               (util/>bytes p))))]
     result))
-
-;;; ----------------------------------------------------------------------------------------------------
-;;; Logging
-;;; ----------------------------------------------------------------------------------------------------
-(def ^:private logging? (atom false))
-
-(defn- set-logging-traffic!
-  [v]
-  (reset! logging? (or (and v true) false)))
-
-(defn enable-log-traffic!
-  []
-  (set-logging-traffic! true))
-
-(defn disable-log-traffic!
-  []
-  (set-logging-traffic! false))
-
-
-(defn init!
-  []
-  (set-logging-traffic! (u/log-traffic?)))
-

@@ -1,11 +1,10 @@
 (ns pdenno.jupyter-client.zmq-client
   (:require
-   [clojure.pprint		:as pp	:refer [pprint]]
-   [taoensso.timbre		:as log]
-   [zeromq.zmq			:as zmq]
-
+   [clojure.tools.logging           :as log]
+   [clojure.pprint		    :as pp :refer [pprint]]
    [pdenno.jupyter-client.util 	    :as u]
-   [pdenno.jupyter-client.transport :as T]))
+   [pdenno.jupyter-client.transport :as T]
+   [zeromq.zmq			    :as zmq]))
 
 (defn- receive-jupyter-message
   ([zmq-socket flag]

@@ -1,11 +1,9 @@
-(ns pdenno.jupyter-client.magic
+(ns pdenno.jupyter-client.magic-server
   "A rather vanilla zmq server useful for responding to Ipython magic"
   (:require
    [clojure.tools.logging      :as log]
    [zeromq.zmq                 :as zmq]
    [pdenno.jupyter-client.util :as util]))
-
-;;; ToDo: Fix the problem where old messages (stop uuid strings mostly) aren't cleared. 
 
 (defprotocol Blocking-Server
   (start [this])
@@ -37,25 +35,19 @@
                              (zmq/bind endpoint))]
         (zmq/set-linger socket 0)
         (try
-          (zmq/receive socket zmq/dont-wait) 
           (while @keep-running? 
             (let [request (zmq/receive-str socket)]
-              (cond (= request skey) (swap! keep-running? not),
-                    (util/uuid-ish? request) ; Ugh! Leftover still not cleared! Do nothing.
-                    (log/info "Discarding a uuid.")
-                    :else
+              (if (= request skey)
+                (swap! keep-running? not)
+                (do (log/info (str "Received request: " request))
                     (let [resp (response-fn request)]
-                      (do (log/info (str "Received request" request))
-                          (if (string? resp)
-                            (zmq/send-str socket resp)
-                            (zmq/send-str (str "Server response is invalid:" resp))))))))
+                      (log/info (str "Compute response: " resp))
+                      (if (string? resp)
+                        (zmq/send-str socket resp)
+                        (zmq/send-str socket (str "Server response is invalid:" resp))))))))
           (finally
             (log/info "Stopping myself")
-            (-> socket
-                ;(zmq/receive zmq/dont-wait)
-                ;(zmq/disconnect endpoint)
-                (zmq/unbind     endpoint))
-            ;(zmq/destroy ctx)
+            (zmq/unbind socket endpoint)
             (zmq/close socket)))))))
 
 (defn make-magic-server

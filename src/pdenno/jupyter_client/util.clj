@@ -5,27 +5,8 @@
    [pandect.algo.sha256	       :refer [sha256-hmac]]
    [clojure.spec.alpha	       :as s]
    [java-time		       :as jtm]
-   [pdenno.jupyter-client.spec :as sp]
-   [omniconf.core	       :as cfg])
+   [pdenno.jupyter-client.spec :as sp])
   (:import [java.time.format DateTimeFormatter]))
-
-(defn log-traffic?
-  []
-  (cfg/get :traffic-logging?))
-
-;;; POD Not sure this is being used!
-(cfg/define
-  {:log-level			{:description	"Default log level as defined by com.taoensso/timbre."
-                                 :type		:keyword
-                                 :one-of	[:trace :debug :info :warn :error :fatal :report]
-                                 :default	:error}
-   :print-stacktraces?		{:description	(str "Print stacktrace on error. "
-                                                     "Temporary workaround for issue with uncaught exceptions in nrepl.")
-                                 :type		:boolean
-                                 :default	true}
-   :traffic-logging?		{:description	"Log all incoming and outgoing ZMQ message to stdout."
-                                 :type		:boolean
-                                 :default	false}})
 
 ;;; ---------------------------------------------------------------------------------
 ;;; From clojupyter.kernel.util
@@ -73,16 +54,6 @@
   [indent-style var]
   (alter-meta! var #(assoc % :style/indent indent-style)))
 
-(def uuid-pat
-  (re-pattern
-   (apply cl-format nil "^~A{8}\\-~A{4}\\-~A{4}\\-~A{4}\\-~A{12}$"
-          (repeat 5 "[0123456789abcdefg]"))))
-
-(defn uuid-ish?
-  "Return true if the string looks like a Java Random UUID"
-  [str]
-  (re-matches uuid-pat str))
-
 ;;; ---------------------------------------------------------------------------------
 ;;; From clojupyter.kernel.jupyter
 ;;; ---------------------------------------------------------------------------------
@@ -107,4 +78,20 @@
      :parent-header (parse-json-str (message-parent-header message) keyword)
      :content (parse-json-str (message-content message) keyword)
      ::zmq-raw-message message}))
+
+;;; apeckham/.clj
+(defn get-free-port []
+        (let [socket (java.net.ServerSocket. 0)]
+          (.close socket)
+          (.getLocalPort socket)))
+
+(def uuid-pat
+  (re-pattern
+   (apply cl-format nil "^~A{8}\\-~A{4}\\-~A{4}\\-~A{4}\\-~A{12}$"
+          (repeat 5 "[0123456789abcdefg]"))))
+
+(defn uuid-ish?
+  "Return true if the string looks like a Java Random UUID"
+  [str]
+  (re-matches uuid-pat str))
 
