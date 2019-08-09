@@ -6,6 +6,7 @@
    [pdenno.jupyter-client.transport :as T]
    [zeromq.zmq			    :as zmq]))
 
+;;; POD is parts-to-message necessary? 
 (defn- receive-jupyter-message
   ([zmq-socket flag]
    (letfn [(rcv-all
@@ -35,7 +36,7 @@
                message))]
      (when-let [parts (rcv-all zmq-socket flag)]
        (let [message (parts-to-message parts)]
-         (log/debug "Received Jupyter message" (with-out-str (pp/pprint message)))
+         #_(log/debug "Received Jupyter message" (with-out-str (pp/pprint message)))
          message)))))
 
 (defn- send-segments
@@ -46,24 +47,22 @@
                     (zmq/send socket seg more?)))]
     (doall (map send-it segments (range)))))
 
-(defrecord zmq-transport [S req-socket sub-socket parent-message]
+(defrecord zmq-transport [S req-socket sub-socket parent-message] ; POD remove
   T/Transport
   (T/send* [_ socket resp-msgtype {:keys [encoded-jupyter-message]}]
     (let [socket (case socket
                    :req	req-socket
-                   :sub	sub-socket
-                   (throw (ex-info (str "send*: Unknown socket " socket ".") {:socket socket})))]
+                   :sub	sub-socket)]
     (send-segments socket encoded-jupyter-message)))
-  (T/receive* [_ socket]
+  (T/receive* [_ socket flag]
     (let [socket (case socket
                    :req	req-socket
-                   :sub	sub-socket
-                   (throw (ex-info (str "send*: Unknown socket " socket ".") {:socket socket})))]
-      (-> (receive-jupyter-message socket 0)
+                   :sub	sub-socket)]
+      (-> (receive-jupyter-message socket flag)
           u/build-message))))
 
 (alter-meta! #'->zmq-transport #(assoc % :private true))
 
 (defn make-zmq-transport
   [S req-socket sub-socket]
-  (->zmq-transport S req-socket sub-socket nil))
+  (->zmq-transport S req-socket sub-socket nil)) ; POD remove nil

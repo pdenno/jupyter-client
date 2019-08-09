@@ -2,8 +2,9 @@
   "A rather vanilla zmq server useful for responding to Ipython magic"
   (:require
    [clojure.tools.logging      :as log]
-   [zeromq.zmq                 :as zmq]
-   [pdenno.jupyter-client.util :as util]))
+   [clojure.walk               :as walk :only keywordize-keys]
+   [pdenno.jupyter-client.util :as util]
+   [zeromq.zmq                 :as zmq]))
 
 (defprotocol Blocking-Server
   (start [this])
@@ -11,14 +12,17 @@
 
 (defrecord Magic-Server [port server-fn stop-key fut]
   Blocking-Server
-  (start [_] (reset! fut (future (server-fn))))
-  (stop  [_] (with-open [socket (-> (zmq/socket (zmq/context 1) :req)
-                                    (zmq/connect (str "tcp://*:" port)))]
-               (zmq/send-str socket stop-key)
-               (log/info (str "Sending stop key " stop-key))
-               (when (future? @fut)
-                 (future-cancel @fut)
-                 (reset! fut nil)))))
+  (start [_]
+    (log/debug "Starting server")
+    (reset! fut (future (server-fn))))
+  (stop  [_]
+    (with-open [socket (-> (zmq/socket (zmq/context 1) :req)
+                           (zmq/connect (str "tcp://*:" port)))]
+      (->> stop-key util/json-str (zmq/send-str socket))
+      (Thread/sleep 1000) ; Necessary! Give it a chance to quit on its own. 
+      (when (future? @fut)
+        (future-cancel @fut)
+        (reset! fut nil)))))
 
 ;;; https://blog.scottlogic.com/2015/03/20/ZeroMQ-Quick-Intro.html
 ;;; Contexts help manage any sockets that are created as well as the number of threads ZeroMQ uses behind the scenes.
@@ -28,25 +32,27 @@
   "Return a function that listens on port and runs response-fn in a loop."
   [port response-fn skey]
   (fn []
-    (let [ctx (zmq/context 1)
-          endpoint (str "tcp://*:" port)
+    (let [endpoint (str "tcp://*:" port)
           keep-running? (atom true)]
-      (with-open [socket (-> (zmq/socket ctx :rep)
+      (with-open [socket (-> (zmq/socket (zmq/context 1) :rep)
                              (zmq/bind endpoint))]
         (zmq/set-linger socket 0)
         (try
           (while @keep-running? 
-            (let [request (zmq/receive-str socket)]
+            (let [request (-> (zmq/receive-str socket)
+                              util/parse-json-str
+                              walk/keywordize-keys)]
               (if (= request skey)
                 (swap! keep-running? not)
-                (do (log/info (str "Received request: " request))
-                    (let [resp (response-fn request)]
-                      (log/info (str "Compute response: " resp))
-                      (if (string? resp)
-                        (zmq/send-str socket resp)
-                        (zmq/send-str socket (str "Server response is invalid:" resp))))))))
+                (do (log/debug (str "Received request: " request))
+                    (let [resp (try (response-fn request)
+                                    (catch Exception e
+                                      (log/error (str "Error in response-fn on request " request ": " e))
+                                      "Error in response-fn"))]
+                      (log/debug (str "response-fn result: " resp))
+                      (->> resp util/json-str (zmq/send-str socket)))))))
           (finally
-            (log/info "Stopping myself")
+            (log/debug "Stopping myself")
             (zmq/unbind socket endpoint)
             (zmq/close socket)))))))
 
@@ -59,4 +65,3 @@
       :server-fn (magic-server-loop port response-fn skey)
       :stop-key skey
       :fut (atom nil)})))
-

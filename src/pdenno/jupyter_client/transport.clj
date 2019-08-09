@@ -2,6 +2,7 @@
   (:refer-clojure :exclude [send])
   (:require
    [clojure.pprint		:as pp	:refer [pprint cl-format]]
+   [zeromq.zmq                  :as zmq]
    [pdenno.jupyter-client.util 	:as u]))
 
 (defprotocol Transport
@@ -9,7 +10,7 @@
     "Send `message` of type `msgtype` on `socket`.  Not intended to be
     used directly, use `send-req`, `send-stdin`, and `send-iopub`
     instead.")
-  (receive* [_ socket]
+  (receive* [_ socket flags]
     "Read full Jupyter message from `socket`.  Not intended to be used directly,
     use `receive-stdin` or `receive-req` instead."))
 
@@ -23,15 +24,15 @@
 
 (defn receive-iopub
   [transport]
-  (receive* transport :sub))
+  (receive* transport :sub zmq/no-block))
 
 (defn receive-stdin
   [transport]
-  (receive* transport :stdin))
+  (receive* transport :stdin 0))
 
 (defn receive-req
   [transport]
-  (receive* transport :req))
+  (receive* transport :req 0))
 
 (defn bind-parent-message
   [transport parent-message]

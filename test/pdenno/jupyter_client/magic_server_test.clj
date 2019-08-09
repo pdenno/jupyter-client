@@ -2,54 +2,60 @@
   "Test the magic server."
   (:require
    [clojure.java.io                    :as io]
-   [clojure.test                       :refer :all]
    [clojure.string                     :as string]
+   [clojure.test                       :refer :all]
    [clojure.tools.logging              :as log]
    [clojure.walk		       :as walk]
+   [cognitect.transit                  :as transit]
    [pdenno.jupyter-client.magic-server :as msrv]
    [pdenno.jupyter-client.util         :as util]
    [zeromq.zmq	 	               :as zmq]))
 
-(def test-port (util/get-free-port))
+(def test-port (atom nil))
+(defn new-test-port! [] (reset! test-port (util/get-free-port)))
+  
 (def record-of-run (atom []))
 (def clock (atom 0))
 
 (defn tick! [& event]
-  (swap! record-of-run conj (apply str "At " @clock " " event))
-  (Thread/sleep 200)
-  (swap! clock inc))
+  (let [log-msg (apply str "At " @clock " " event)]
+    (println log-msg)
+    (swap! record-of-run conj log-msg)
+    (Thread/sleep 200)
+    (swap! clock inc)))
 
 ;;; ======  Stand-alone test =========================================
-(defn client-asks [data]
-  (tick! "client-asks: " data)
+(defn client-asks [obj]
+  (tick! "client-asks: " obj)
   (let [ctx  (zmq/context 1)
-        ep   (str "tcp://127.0.0.1:" test-port)]
+        ep   (str "tcp://127.0.0.1:" @test-port)]
     (with-open [sock (-> (zmq/socket ctx :req)
                          (zmq/connect ep))]
       (zmq/set-linger sock 0)
       (try
-        (do (zmq/send-str sock (str data))
-            (let [response (zmq/receive-str sock)]
+        (do (->> obj util/json-str (zmq/send-str sock))
+            (let [response (-> (zmq/receive-str sock) util/parse-json-str walk/keywordize-keys)]
               (tick! "client receives: " response)))
         (finally
           (zmq/disconnect sock ep)
-          ;;(zmq/destroy ctx) ; I'm having problems with this. 
+          #_(zmq/destroy ctx) ; I'm having problems with this. 
           (zmq/close sock))))))
 
 (defn test-response-fn
-  "Example response to the python magic. Read data and increment."
+  "Example response to the python magic. Read obj and increment."
   [query]
   (tick! "server receives: " query)
-  (let [response (update (read-string query) :data #(+ % 10))]
+  (let [response (update query :data #(+ % 10))]
     (tick! "server responds: " response)
-    (str response)))
+    response))
 
 (defn test-script []
   (let [server (atom nil)
         data   (atom {:data 0})]
+    (new-test-port!)
     (reset! record-of-run [])
     (reset! clock 0)
-    (reset! server (msrv/make-magic-server test-port test-response-fn))
+    (reset! server (msrv/make-magic-server @test-port test-response-fn))
     (msrv/start @server)
     (tick! "start-server")
     (client-asks {:data 1})
@@ -58,7 +64,7 @@
     (tick! "stop-server")
     (msrv/stop @server)
     (tick! "start-server")
-    (reset! server (msrv/make-magic-server test-port test-response-fn))
+    (reset! server (msrv/make-magic-server @test-port test-response-fn))
     (msrv/start @server)
     (client-asks {:data 100})
     (client-asks {:data 200})

@@ -2,9 +2,9 @@
   (:require
    [cheshire.core	       :as cheshire]
    [clojure.pprint	       :as pp :refer [cl-format]]
-   [pandect.algo.sha256	       :refer [sha256-hmac]]
    [clojure.spec.alpha	       :as s]
    [java-time		       :as jtm]
+   [pandect.algo.sha256	       :refer [sha256-hmac]]
    [pdenno.jupyter-client.spec :as sp])
   (:import [java.time.format DateTimeFormatter]))
 
@@ -94,4 +94,3 @@
   "Return true if the string looks like a Java Random UUID"
   [str]
   (re-matches uuid-pat str))
-

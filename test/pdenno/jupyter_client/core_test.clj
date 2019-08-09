@@ -9,11 +9,11 @@
    [pdenno.jupyter-client.util         :as util]))
 
 ;;; POD ToDo: Is there a way to run Jupyter Notebooks headless for testing like this?
-
 (deftest at-least-one-heartbeat
   (is (some identity (map #(core/heartbeat? :once? true :config-file %)
                           (core/jupyter-runtime-files)))))
 
+;;; If you don't believe it, go check the notebook!
 (defn say-hello [cfile]
   (core/req-msg :config-file cfile
                 :code (cl-format nil "hello_from_clojure = '''~A'''" (util/now)))
@@ -24,7 +24,4 @@
   (let [running (filter #(core/heartbeat? :once? true :config-file %)
                           (core/jupyter-runtime-files))]
     (is (every? say-hello running))))
-
-
-
 

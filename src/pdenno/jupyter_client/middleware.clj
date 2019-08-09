@@ -1,7 +1,6 @@
 (ns pdenno.jupyter-client.middleware
   (:require
-   [clojure.pprint		 :as pp	:refer [pprint cl-format]]
-   [clojure.spec.alpha		 :as s]
+   [clojure.spec.alpha		         :as s]
    [pdenno.jupyter-client.spec	         :as sp]
    [pdenno.jupyter-client.util	         :as util]
    [pdenno.jupyter-client.transport	 :as tp :refer [handler-when 

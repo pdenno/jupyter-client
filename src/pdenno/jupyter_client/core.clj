@@ -13,8 +13,6 @@
    [pandect.algo.sha256		     :refer [sha256-hmac]]
    [zeromq.zmq			     :as zmq]))
 
-;;; ToDo: Replace the cheezy assignment statements with 
-
 (def EXE-MSG {:delimiter "<IDS|MSG>",
               :header
               {:username "username",
@@ -117,36 +115,68 @@
                                    {} ; metadata
                                    (:content ?msg)))))
 
+;;; https://jupyter-client.readthedocs.io/en/stable/messaging.html
+;;;  Messages on the shell (ROUTER/DEALER) channel:
+;;; The client sends an <action>_request message (such as execute_request) on its shell (DEALER) socket.
+;;; The kernel receives that request and immediately publishes a status: busy message on IOPub.
+;;; The kernel then processes the request and sends the appropriate <action>_reply message, such as execute_reply.
+;;; After processing the request and publishing associated IOPub messages, if any, the kernel publishes a status: idle message.
+;;; This idle status message indicates that IOPub messages associated with a given request have all been received.
+;;; :content {:execution_state "busy"}
+;;; :content {:code "print('doesTask' in (globals)())", :execution_count 284}
+;;; :content {:name "stdout", :text "False\n"}
+;;; :content {:execution_state "idle"}
+(defn idle-msg?
+  "Return true when the message content is :execution_state 'idle'."
+  [m parent-id]
+  (when m
+    (and (= parent-id (-> m :parent-header :msg_id))
+         (= "idle" (-> m :content :execution_state)))))
+
+(defn content-msg?
+  "Return :text  when the message is {:name 'stdout', :text 'some text\n'}"
+  [m parent-id]
+  (when m
+    (when (and (= parent-id (-> m :parent-header :msg_id))
+               (= "stdout"  (-> m :content :name)))
+      (-> m :content :text))))
+
 (defn req-msg
   "Send an execute_request to the kernel. Return status and stdout side-effects."
-  [& {:keys [code config-file timeout-ms verbose?]
-      :or {timeout-ms 1000}}]
-  (let [config            (config-from-file config-file)
-        [signer checker]  (util/make-signer-checker (:key config)) ; Signing does not work. I use key=''
-        msg               (-> (make-msg config code signer)
-                              MB/encode-jupyter-message)
+  [& {:keys [code config config-file timeout-ms]
+      :or {timeout-ms 2000}}]  ; POD was 1000 BUT problem is :no-output, not :timeout....
+  (let [config            (or config (config-from-file config-file))
+        [signer checker]  (util/make-signer-checker (:key config)) ; Signing not working. I use key=''
+        msg               (make-msg config code signer)
+        parent-id         (-> msg :header :msg_id)
+        emsg              (MB/encode-jupyter-message msg)
         ctx               (zmq/context 1)
         proto-ctx	  {:signer signer, :checker checker}
         [sh-ep io-ep]     (mapv #(str "tcp://127.0.0.1:" (-> config %)) [:shell_port :iopub_port])
-        [preq psub]       [(promise) (promise)]
+        preq              (promise)
+        start             (System/currentTimeMillis)
         result            (atom nil)]
     (with-open [shell (-> (zmq/socket ctx :req) (zmq/connect sh-ep)) 
                 sub   (-> (zmq/socket ctx :sub) (zmq/connect io-ep))]
       (try
         (zmq/subscribe sub "")
         (let [transport (zmqc/make-zmq-transport proto-ctx shell sub)]
-          (T/send-req transport "execute_request" {:encoded-jupyter-message msg})
+          (T/send-req transport "execute_request" {:encoded-jupyter-message emsg})
           (future (deliver preq (-> (T/receive-req transport) :content :status keyword)))
-          (future (deliver psub (->> [(T/receive-iopub transport)  ; POD I *assume* the req generates three pub responses:
-                                      (T/receive-iopub transport)  ; status, execute_input, stream. If less, it will 
-                                      (T/receive-iopub transport)] ; probably time out. 
-                                     (map #(dissoc % :jupyter-client.util/zmq-raw-message))
-                                     (filter #(= "stream" (-> % :header :msg_type)))
-                                     first :content :text)))
-          (reset! result {:status (deref preq timeout-ms :timeout)
-                          :stdout (deref psub timeout-ms :no-output)}))
+          ;; Only return the content message once you've seen the idle message.
+          (let [stdout (loop [timeout? false idle? false msg nil] 
+                         (let [m (T/receive-iopub transport)] ; recv on IOPUB does not block.
+                           (cond idle? msg
+                                 timeout? nil
+                                 :else (recur
+                                        (> (- (System/currentTimeMillis) start) timeout-ms)
+                                        (idle-msg? m parent-id)
+                                        (or msg (content-msg? m parent-id))))))]
+            (reset! result {:status (deref preq timeout-ms :timeout)
+                            :stdout stdout})))
+        (catch Exception e (throw (ex-info "Error in req-msg:" {:error e})))
         (finally
-          (when verbose? (println "Disconnecting"))
+          (log/debug "Disconnecting")
           (doall
            (map #(do (zmq/disconnect %1 %2)
                      (zmq/close %1))
