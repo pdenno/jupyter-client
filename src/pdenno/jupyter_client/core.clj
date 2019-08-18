@@ -6,25 +6,13 @@
    [clojure.spec.alpha		     :as s]
    [clojure.tools.logging            :as log]
    [clojure.walk		     :as walk]
-   [pdenno.jupyter-client.middleware :as MB]
+   [pdenno.jupyter-client.middleware :as middle]
    [pdenno.jupyter-client.transport  :as T]
    [pdenno.jupyter-client.util	     :as util]
    [pdenno.jupyter-client.zmq-client :as zmqc]
    [pandect.algo.sha256		     :refer [sha256-hmac]]
    [zeromq.zmq			     :as zmq]))
 
-(def EXE-MSG {:delimiter "<IDS|MSG>",
-              :header
-              {:username "username",
-               :msg_type "execute_request",
-               :version "5.2"},
-              :parent-header {},
-              :content
-              {:silent false,
-               :store_history true,
-               :user_expressions {},
-               :allow_stdin true,
-               :stop_on_error true}})
 
 (declare wait-response heartbeat?)
 
@@ -87,30 +75,30 @@
     (future (deliver p (zmq/receive-str socket)))
     (deref p timeout :timeout)))
 
-;;; Doc on zmq/socket
-;;;   The newly created socket is initially unbound, and not associated with any
-;;;   endpoints. In order to establish a message flow a socket must first be
-;;;   connected to at least one endpoint with connect, or at least one endpoint
-;;;   must be created for accepting incoming connections with bind.
-
-;;; It seems to me that the meaning of bind and serve isn't accurately communicated in the documentation. 
-;;; What really matters is the messaging pattern used. (e.g. :rep, :req, :pair).
-;;; You can do both send and recv with server/client doing respectively bind/connect with :rep/:req.
-
-;;; stdin messages are unique in that the request comes from the kernel, and the reply from the frontend.
-;;; The frontend is not required to support this, but if it does not, it must set 'allow_stdin' : False
+(def EXE-MSG {:delimiter "<IDS|MSG>",
+              :header {:version util/PROTOCOL-VERSION
+                       :username "username",
+                       :msg_type "execute_request"},
+              :parent-header {},
+              :content
+              {:silent false,
+               :store_history true,
+               :user_expressions {},
+               :allow_stdin true,
+               :stop_on_error true}})
 
 (defn- make-msg
   "Complete all the easy parts of a message."
   [config code signer]
   (as-> EXE-MSG ?msg
-    (assoc ?msg :envelope [(-> config :key .getBytes)])
-    (assoc-in ?msg [:header :session] (:key config))
+    ;; ; They have :envelope = (if (= resp-socket :req) (jup/message-envelope parent-message) [(u/>bytes resp-msgtype)])
+    (assoc ?msg :envelope [(-> config :key .getBytes)]) ; Huh?
+    ;;(assoc-in ?msg [:header :session] (jup/message-session parent-message)) ; new ... we don't have a parent message.
+    (assoc-in ?msg [:header :date] (util/now)) ; new
     (assoc-in ?msg [:header :msg_id] (util/uuid))
-    (assoc-in ?msg [:header :version] util/PROTOCOL-VERSION)
     (assoc-in ?msg [:content :code] code)
     (assoc-in ?msg [:content :allow_stdin] false)
-    (assoc ?msg :signature (signer (:header ?msg) ; ; sig not working. Use '' for key. 
+    (assoc ?msg :signature "" #_(signer (:header ?msg) ; ; sig not working. Use '' for key. 
                                    (:parent-header ?msg)
                                    {} ; metadata
                                    (:content ?msg)))))
@@ -141,26 +129,28 @@
                (= "stdout"  (-> m :content :name)))
       (-> m :content :text))))
 
+(def diag (atom nil))
+
 (defn req-msg
   "Send an execute_request to the kernel. Return status and stdout side-effects."
   [& {:keys [code config config-file timeout-ms]
-      :or {timeout-ms 2000}}]  ; POD was 1000 BUT problem is :no-output, not :timeout....
+      :or {timeout-ms 1000}}]  
   (let [config            (or config (config-from-file config-file))
-        [signer checker]  (util/make-signer-checker (:key config)) ; Signing not working. I use key=''
+        [signer checker]  (util/make-signer-checker (:key config))
         msg               (make-msg config code signer)
         parent-id         (-> msg :header :msg_id)
-        emsg              (MB/encode-jupyter-message msg)
+        emsg              (middle/encode-jupyter-message msg)
         ctx               (zmq/context 1)
-        proto-ctx	  {:signer signer, :checker checker}
         [sh-ep io-ep]     (mapv #(str "tcp://127.0.0.1:" (-> config %)) [:shell_port :iopub_port])
         preq              (promise)
         start             (System/currentTimeMillis)
         result            (atom nil)]
+    (reset! diag msg)
     (with-open [shell (-> (zmq/socket ctx :req) (zmq/connect sh-ep)) 
                 sub   (-> (zmq/socket ctx :sub) (zmq/connect io-ep))]
       (try
         (zmq/subscribe sub "")
-        (let [transport (zmqc/make-zmq-transport proto-ctx shell sub)]
+        (let [transport (zmqc/make-zmq-transport signer checker shell sub)]
           (T/send-req transport "execute_request" {:encoded-jupyter-message emsg})
           (future (deliver preq (-> (T/receive-req transport) :content :status keyword)))
           ;; Only return the content message once you've seen the idle message.
@@ -174,9 +164,10 @@
                                         (or msg (content-msg? m parent-id))))))]
             (reset! result {:status (deref preq timeout-ms :timeout)
                             :stdout stdout})))
+        (log/info "result = " @result)
         (catch Exception e (throw (ex-info "Error in req-msg:" {:error e})))
         (finally
-          (log/debug "Disconnecting")
+          (log/trace "Disconnecting")
           (doall
            (map #(do (zmq/disconnect %1 %2)
                      (zmq/close %1))

@@ -34,6 +34,7 @@
       (jtm/format DateTimeFormatter/ISO_OFFSET_DATE_TIME)))
 
 (defn make-signer-checker
+  "Define two functions using the signing key and return them in a vector [signer-fn checker-fn]"
   [key]
   (let [mkchecker (fn [signer]
                     (fn [{:keys [signature header parent-header metadata content]}]

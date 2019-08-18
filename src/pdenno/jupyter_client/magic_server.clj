@@ -16,13 +16,14 @@
     (log/debug "Starting server")
     (reset! fut (future (server-fn))))
   (stop  [_]
-    (with-open [socket (-> (zmq/socket (zmq/context 1) :req)
-                           (zmq/connect (str "tcp://*:" port)))]
-      (->> stop-key util/json-str (zmq/send-str socket))
-      (Thread/sleep 1000) ; Necessary! Give it a chance to quit on its own. 
-      (when (future? @fut)
-        (future-cancel @fut)
-        (reset! fut nil)))))
+    (when port
+      (with-open [socket (-> (zmq/socket (zmq/context 1) :req)
+                             (zmq/connect (str "tcp://*:" port)))]
+        (->> stop-key util/json-str (zmq/send-str socket))
+        (Thread/sleep 1000) ; Necessary! Give it a chance to quit on its own. 
+        (when (future? @fut)
+          (future-cancel @fut)
+        (reset! fut nil))))))
 
 ;;; https://blog.scottlogic.com/2015/03/20/ZeroMQ-Quick-Intro.html
 ;;; Contexts help manage any sockets that are created as well as the number of threads ZeroMQ uses behind the scenes.

@@ -2,7 +2,7 @@
   (:require
    [clojure.tools.logging           :as log]
    [clojure.pprint		    :as pp :refer [pprint]]
-   [pdenno.jupyter-client.util 	    :as u]
+   [pdenno.jupyter-client.util 	    :as util]
    [pdenno.jupyter-client.transport :as T]
    [zeromq.zmq			    :as zmq]))
 
@@ -47,7 +47,7 @@
                     (zmq/send socket seg more?)))]
     (doall (map send-it segments (range)))))
 
-(defrecord zmq-transport [S req-socket sub-socket parent-message] ; POD remove
+(defrecord zmq-transport [signer checker req-socket sub-socket]  ; POD I remove parent-message here.
   T/Transport
   (T/send* [_ socket resp-msgtype {:keys [encoded-jupyter-message]}]
     (let [socket (case socket
@@ -59,10 +59,10 @@
                    :req	req-socket
                    :sub	sub-socket)]
       (-> (receive-jupyter-message socket flag)
-          u/build-message))))
+          util/build-message))))
 
 (alter-meta! #'->zmq-transport #(assoc % :private true))
 
 (defn make-zmq-transport
-  [S req-socket sub-socket]
-  (->zmq-transport S req-socket sub-socket nil)) ; POD remove nil
+  [signer checker req-socket sub-socket]
+  (->zmq-transport signer checker req-socket sub-socket)) ; POD removed nil (matched parent-message)
