@@ -13,7 +13,7 @@
 (defrecord Magic-Server [port server-fn stop-key fut]
   Blocking-Server
   (start [_]
-    (log/debug "Starting server")
+    (log/info "Starting magic server")
     (reset! fut (future (server-fn))))
   (stop  [_]
     (when port
@@ -45,15 +45,18 @@
                               walk/keywordize-keys)]
               (if (= request skey)
                 (swap! keep-running? not)
-                (do (log/debug (str "Received request: " request))
-                    (let [resp (try (response-fn request)
-                                    (catch Exception e
-                                      (log/error (str "Error in response-fn on request " request ": " e))
-                                      "Error in response-fn"))]
-                      (log/debug (str "response-fn result: " resp))
-                      (->> resp util/json-str (zmq/send-str socket)))))))
+                (try (log/info "Received request: " request)
+                     (let [resp (try (response-fn request)
+                                     (catch Exception e
+                                       (log/info "Error in response-fn on request " request ": " e)
+                                       "Error in response-fn"))]
+                       (log/info "magic response-fn result: " resp)
+                       (->> resp util/json-str (zmq/send-str socket)))
+                     (catch Exception e
+                       (log/info "Magic response not serializable")
+                       (->> "Magic response not serializable" util/json-str (zmq/send-str socket)))))))
           (finally
-            (log/debug "Stopping myself")
+            (log/info "Stopping magic server")
             (zmq/unbind socket endpoint)
             (zmq/close socket)))))))
 
